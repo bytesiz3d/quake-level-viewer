@@ -3,6 +3,7 @@
 #include <rcamera.h>
 #include <rlgl.h>
 
+#include <assert.h>
 #include <format>
 #include <fstream>
 #include <iomanip>
@@ -199,21 +200,30 @@ ReadEntity(std::istream& stream)
 	return entity;
 }
 
-std::vector<Entity> entities{};
 
-void
+struct Map
+{
+	std::vector<Entity> entities;
+};
+
+Map
+ReadMap(std::istream& stream)
+{
+	Map map = {};
+	while ((stream >> std::ws).good())
+	{
+		Entity entity = ReadEntity(stream);
+		assert(entity.tags.empty() == false);
+		map.entities.push_back(entity);
+	}
+	return map;
+}
+
+Map
 LoadMapFile(const char* path)
 {
-	entities.clear();
-
 	std::ifstream mapFile{path};
-
-	while ((mapFile >> std::ws).good())
-	{
-		Entity entity = ReadEntity(mapFile);
-		if (entity.tags.empty() == false)
-			entities.push_back(entity);
-	}
+	return ReadMap(mapFile);
 }
 
 void
@@ -257,7 +267,8 @@ main()
 	SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
 	InitWindow(1600, 900, "quake-level-viewer");
 	DisableCursor(); // Limit cursor to relative movement inside the window
-	LoadMapFile(MAP_SOURCE_DIR "/DM1.MAP");
+
+	auto map = LoadMapFile(MAP_SOURCE_DIR "/DM1.MAP");
 
 	Camera camera = {
 		.position = {1.0f, 1.0f, 1.0f},
@@ -273,7 +284,7 @@ main()
 		if (IsFileDropped())
 		{
 			FilePathList droppedFiles = LoadDroppedFiles();
-			LoadMapFile(droppedFiles.paths[0]);
+			map = LoadMapFile(droppedFiles.paths[0]);
 			UnloadDroppedFiles(droppedFiles);
 		}
 
@@ -285,7 +296,7 @@ main()
 
 			BeginMode3D(camera);
 			{
-				for (auto& entity : entities)
+				for (auto& entity : map.entities)
 				{
 					for (auto& brush : entity.brushes)
 					{
@@ -306,10 +317,7 @@ main()
 		EndDrawing();
 	}
 
-	// De-Initialization
-	//--------------------------------------------------------------------------------------
-	CloseWindow(); // Close window and OpenGL context
-
+	CloseWindow();
 	return 0;
 }
 
