@@ -5,6 +5,8 @@
 
 #include <assert.h>
 #include <format>
+#include <numeric>
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <istream>
@@ -20,9 +22,15 @@
 #define GLSL_VERSION 100
 #endif
 
+struct Vertex
+{
+	Vector3 p;
+	Vector3 n;
+};
+
 struct Poly
 {
-	std::vector<Vector3> v;
+	std::vector<Vertex> v;
 	BoundingBox bbox;
 };
 
@@ -52,9 +60,9 @@ PolysFromPlanes(std::span<Plane> planes)
 				}
 				if (legal)
 				{
-					polys[i].v.push_back(vertex);
-					polys[j].v.push_back(vertex);
-					polys[k].v.push_back(vertex);
+					polys[i].v.push_back({vertex, planes[i].n});
+					polys[j].v.push_back({vertex, planes[j].n});
+					polys[k].v.push_back({vertex, planes[k].n});
 				}
 			}
 		}
@@ -65,16 +73,17 @@ PolysFromPlanes(std::span<Plane> planes)
 		if (poly.v.empty())
 			continue;
 
-		Vector3 minVertex = poly.v[0];
-		Vector3 maxVertex = poly.v[0];
+		Vector3 minVertex = poly.v[0].p;
+		Vector3 maxVertex = poly.v[0].p;
 
 		for (size_t i = 1; i < poly.v.size(); i++)
 		{
-			minVertex = Vector3Min(minVertex, poly.v[i]);
-			maxVertex = Vector3Max(maxVertex, poly.v[i]);
+			minVertex = Vector3Min(minVertex, poly.v[i].p);
+			maxVertex = Vector3Max(maxVertex, poly.v[i].p);
 		}
 		poly.bbox = {.min = minVertex, .max = maxVertex};
 	}
+
 	return polys;
 }
 
@@ -112,16 +121,8 @@ ReadPlane(std::istream& stream)
 	char buf[256];
 	stream.getline(buf, sizeof(buf));
 
-	Plane plane = {};
-	// Vertices are listed in clockwise order
-	// 0 ---------- 1
-	// |
-	// |
-	// 2
-	plane.n = Vector3Normalize(cross(pv[2] - pv[0], pv[1] - pv[0]));
-
-	plane.d = -dot(plane.n, pv[0]);
-	return plane;
+	// Changing from Quake's (left-handed, Z-Up) system to Raylib's (right-handed, Y-Up) system
+	return PlaneFromPoints(pv[0], pv[2], pv[1]);
 }
 
 struct Brush
@@ -158,7 +159,19 @@ ReadBrush(std::istream& stream)
 			throw std::format("Unexpected token {}", token);
 	}
 
-	return Brush{planes, PolysFromPlanes(planes)};
+	Brush brush = {planes, PolysFromPlanes(planes)};
+	Vector3 minVertex = brush.polys[0].bbox.min;
+	Vector3 maxVertex = brush.polys[0].bbox.max;
+	for (auto& poly : brush.polys)
+	{
+		if (poly.v.empty())
+			continue;
+
+		minVertex = Vector3Min(minVertex, poly.bbox.min);
+		maxVertex = Vector3Max(maxVertex, poly.bbox.max);
+	}
+	brush.bbox = {minVertex, maxVertex};
+	return brush;
 }
 
 struct Entity
@@ -238,9 +251,12 @@ LoadMapFile(const char* path)
 void
 UpdateCamera(Camera* camera)
 {
-	constexpr float CAMERA_MOVE_SPEED = 0.3f;
+	float CAMERA_MOVE_SPEED = 0.03f;
 	constexpr float CAMERA_ROTATION_SPEED = 0.03f;
 	constexpr float CAMERA_MOUSE_MOVE_SENSITIVITY = 0.003f;
+
+	if (IsKeyDown(KEY_LEFT_SHIFT))
+		CAMERA_MOVE_SPEED *= 10;
 
 	Vector2 mousePositionDelta = GetMouseDelta();
 
@@ -269,6 +285,164 @@ UpdateCamera(Camera* camera)
 	if (IsKeyDown(KEY_LEFT_CONTROL)) CameraMoveUp(camera, -20 * CAMERA_MOVE_SPEED);
 }
 
+float
+AttenuatedLight(float distance)
+{
+	constexpr float HD = 30.f;
+	constexpr float K = 1.f / (HD * HD);
+	return 1.f / (1.f + K * distance * distance);
+}
+
+void
+DrawBboxVertex(float x, float y, float z, Vector3 cameraPosition)
+{
+	float distance = Vector3Distance(cameraPosition, {x, y, z});
+	float attenuated_light = AttenuatedLight(distance);
+	rlColor3f(attenuated_light, attenuated_light, attenuated_light);
+	rlVertex3f(x, y, z);
+}
+
+void
+DrawBbox(BoundingBox bbox, Vector3 cameraPosition)
+{
+	Vector3 position = BboxCenter(bbox);
+	float width = BboxSize(bbox).x;
+	float height = BboxSize(bbox).y;
+	float length = BboxSize(bbox).z;
+
+	float x = 0.0f;
+	float y = 0.0f;
+	float z = 0.0f;
+
+	rlPushMatrix();
+	// NOTE: Transformation is applied in inverse order (scale -> rotate -> translate)
+	rlTranslatef(position.x, position.y, position.z);
+	//rlRotatef(45, 0, 1, 0);
+	//rlScalef(1.0f, 1.0f, 1.0f);   // NOTE: Vertices are directly scaled on definition
+
+	rlBegin(RL_TRIANGLES);
+
+	// Front face
+	DrawBboxVertex(x - width / 2, y - height / 2, z + length / 2, cameraPosition); // Bottom Left
+	DrawBboxVertex(x + width / 2, y - height / 2, z + length / 2, cameraPosition); // Bottom Right
+	DrawBboxVertex(x - width / 2, y + height / 2, z + length / 2, cameraPosition); // Top Left
+
+	DrawBboxVertex(x + width / 2, y + height / 2, z + length / 2, cameraPosition); // Top Right
+	DrawBboxVertex(x - width / 2, y + height / 2, z + length / 2, cameraPosition); // Top Left
+	DrawBboxVertex(x + width / 2, y - height / 2, z + length / 2, cameraPosition); // Bottom Right
+
+	// Back face
+	DrawBboxVertex(x - width / 2, y - height / 2, z - length / 2, cameraPosition); // Bottom Left
+	DrawBboxVertex(x - width / 2, y + height / 2, z - length / 2, cameraPosition); // Top Left
+	DrawBboxVertex(x + width / 2, y - height / 2, z - length / 2, cameraPosition); // Bottom Right
+
+	DrawBboxVertex(x + width / 2, y + height / 2, z - length / 2, cameraPosition); // Top Right
+	DrawBboxVertex(x + width / 2, y - height / 2, z - length / 2, cameraPosition); // Bottom Right
+	DrawBboxVertex(x - width / 2, y + height / 2, z - length / 2, cameraPosition); // Top Left
+
+	// Top face
+	DrawBboxVertex(x - width / 2, y + height / 2, z - length / 2, cameraPosition); // Top Left
+	DrawBboxVertex(x - width / 2, y + height / 2, z + length / 2, cameraPosition); // Bottom Left
+	DrawBboxVertex(x + width / 2, y + height / 2, z + length / 2, cameraPosition); // Bottom Right
+
+	DrawBboxVertex(x + width / 2, y + height / 2, z - length / 2, cameraPosition); // Top Right
+	DrawBboxVertex(x - width / 2, y + height / 2, z - length / 2, cameraPosition); // Top Left
+	DrawBboxVertex(x + width / 2, y + height / 2, z + length / 2, cameraPosition); // Bottom Right
+
+	// Bottom face
+	DrawBboxVertex(x - width / 2, y - height / 2, z - length / 2, cameraPosition); // Top Left
+	DrawBboxVertex(x + width / 2, y - height / 2, z + length / 2, cameraPosition); // Bottom Right
+	DrawBboxVertex(x - width / 2, y - height / 2, z + length / 2, cameraPosition); // Bottom Left
+
+	DrawBboxVertex(x + width / 2, y - height / 2, z - length / 2, cameraPosition); // Top Right
+	DrawBboxVertex(x + width / 2, y - height / 2, z + length / 2, cameraPosition); // Bottom Right
+	DrawBboxVertex(x - width / 2, y - height / 2, z - length / 2, cameraPosition); // Top Left
+
+	// Right face
+	DrawBboxVertex(x + width / 2, y - height / 2, z - length / 2, cameraPosition); // Bottom Right
+	DrawBboxVertex(x + width / 2, y + height / 2, z - length / 2, cameraPosition); // Top Right
+	DrawBboxVertex(x + width / 2, y + height / 2, z + length / 2, cameraPosition); // Top Left
+
+	DrawBboxVertex(x + width / 2, y - height / 2, z + length / 2, cameraPosition); // Bottom Left
+	DrawBboxVertex(x + width / 2, y - height / 2, z - length / 2, cameraPosition); // Bottom Right
+	DrawBboxVertex(x + width / 2, y + height / 2, z + length / 2, cameraPosition); // Top Left
+
+	// Left face
+	DrawBboxVertex(x - width / 2, y - height / 2, z - length / 2, cameraPosition); // Bottom Right
+	DrawBboxVertex(x - width / 2, y + height / 2, z + length / 2, cameraPosition); // Top Left
+	DrawBboxVertex(x - width / 2, y + height / 2, z - length / 2, cameraPosition); // Top Right
+
+	DrawBboxVertex(x - width / 2, y - height / 2, z + length / 2, cameraPosition); // Bottom Left
+	DrawBboxVertex(x - width / 2, y + height / 2, z + length / 2, cameraPosition); // Top Left
+	DrawBboxVertex(x - width / 2, y - height / 2, z - length / 2, cameraPosition); // Bottom Right
+
+	rlEnd();
+	rlPopMatrix();
+}
+
+float
+GetEdgeDistance(Vector3 e1, Vector3 e2, Vector3 v)
+{
+	float component = dot(v - e1, e2 - e1);
+	if (0 <= component && component <= Vector3Length(e2 - e1))
+	{
+		Vector3 edgeDirection = Vector3Normalize(e2 - e1);
+		Vector3 projection = e1 + component * edgeDirection;
+		return Vector3Distance(v, projection);
+	}
+	return FLT_MAX;
+}
+
+float
+GetQuadDistance(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 v)
+{
+	float distance[9] = {FLT_MAX};
+
+	Plane quadPlane = PlaneFromPoints(a, b, c);
+	RayCollision hit = GetRayCollisionQuad({.position = v, .direction = -quadPlane.n}, a, b, c, d);
+	if (hit.hit)
+		distance[0] = hit.distance; // inside quad
+
+	// inside edge
+	distance[1] = GetEdgeDistance(a, b, v);
+	distance[2] = GetEdgeDistance(b, c, v);
+	distance[3] = GetEdgeDistance(c, d, v);
+	distance[4] = GetEdgeDistance(d, a, v);
+
+	// nearest vertex
+	distance[5] = Vector3Distance(a, v);
+	distance[6] = Vector3Distance(b, v);
+	distance[7] = Vector3Distance(c, v);
+	distance[8] = Vector3Distance(d, v);
+
+	return *std::min_element(std::begin(distance), std::end(distance));
+}
+
+float
+GetBboxDistance(BoundingBox bbox, Vector3 v)
+{
+	Vector3 d = bbox.max - bbox.min;
+	Vector3
+		v000 = bbox.min + Vector3{0, 0, 0},
+		v100 = bbox.min + Vector3{d.x, 0, 0},
+		v110 = bbox.min + Vector3{d.x, d.y, 0},
+		v010 = bbox.min + Vector3{0, d.y, 0},
+
+		v001 = bbox.min + Vector3{0, 0, d.z},
+		v101 = bbox.min + Vector3{d.x, 0, d.z},
+		v111 = bbox.min + Vector3{d.x, d.y, d.z},
+		v011 = bbox.min + Vector3{0, d.y, d.z};
+
+	float distance[6] = {FLT_MAX};
+	distance[0] = GetQuadDistance(v001, v101, v111, v011, v);
+	distance[1] = GetQuadDistance(v101, v100, v110, v111, v);
+	distance[2] = GetQuadDistance(v100, v000, v010, v110, v);
+	distance[3] = GetQuadDistance(v000, v001, v011, v010, v);
+	distance[4] = GetQuadDistance(v011, v111, v110, v010, v);
+	distance[5] = GetQuadDistance(v000, v100, v101, v001, v);
+	return *std::min_element(std::begin(distance), std::end(distance));
+}
+
 int
 main()
 {
@@ -277,7 +451,7 @@ main()
 	InitWindow(1600, 900, "quake-level-viewer");
 	DisableCursor(); // Limit cursor to relative movement inside the window
 
-	auto map = LoadMapFile(MAP_SOURCE_DIR "/DM1.MAP");
+	auto map = LoadMapFile(MAP_SOURCE_DIR "/B_ARMOR1.MAP");
 
 	Camera camera = {
 		.position = {10.0f, 10.0f, 10.0f},
@@ -287,6 +461,7 @@ main()
 		.projection = CAMERA_PERSPECTIVE,
 	};
 
+	rlDisableBackfaceCulling();
 	rlEnableDepthMask();
 	while (!WindowShouldClose())
 	{
@@ -297,33 +472,65 @@ main()
 			UnloadDroppedFiles(droppedFiles);
 		}
 
+		static bool cursorEnabled = false;
+		if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+		{
+			if (cursorEnabled)
+			{
+				DisableCursor();
+				cursorEnabled = false;
+			}
+			else
+			{
+				EnableCursor();
+				cursorEnabled = true;
+			}
+		}
+
 		UpdateCamera(&camera);
 
+		float nearestDistance = FLT_MAX;
+		BoundingBox nearestPolyBbox;
 		BeginDrawing();
 		{
 			ClearBackground(RAYWHITE);
 
 			BeginMode3D(camera);
 			{
+				Ray cameraRay = {.position = camera.position};
 				for (auto& entity : map.entities)
 				{
 					for (auto& brush : entity.brushes)
 					{
-						for (auto& poly : brush.polys)
+						auto bbox = brush.bbox;
+
+						float polyDistance = GetBboxDistance(bbox, camera.position);
+						if (polyDistance < nearestDistance)
 						{
-							DrawBoundingBox(poly.bbox, LIME);
-							DrawCubeV(BboxCenter(poly.bbox), BboxSize(poly.bbox), DARKGRAY);
+							nearestDistance = polyDistance;
+							nearestPolyBbox = bbox;
 						}
+
+						DrawBoundingBox(bbox, LIME);
+
+						uint8_t grayscale = 255 * AttenuatedLight(polyDistance);
+						// DrawCubeV(BboxCenter(bbox), BboxSize(bbox), {grayscale, grayscale, grayscale, 255});
+						DrawBbox(bbox, camera.position);
 					}
 				}
-				DrawGrid(100 + (int)(Vector3Length(camera.position) / 10), 10.f);
-				DrawRay({.direction = {1, 0, 0}}, RED);
-				DrawRay({.direction = {0, 1, 0}}, GREEN);
-				DrawRay({.direction = {0, 0, 1}}, BLUE);
+				// DrawGrid(100 + (int)(Vector3Length(camera.position) / 10), 10.f);
+				// DrawRay({.direction = {1, 0, 0}}, RED);
+				// DrawRay({.direction = {0, 1, 0}}, GREEN);
+				// DrawRay({.direction = {0, 0, 1}}, BLUE);
+
+				DrawBoundingBox(nearestPolyBbox, RED);
 			}
 			EndMode3D();
 
 			DrawFPS(10, 10);
+
+			DrawText(TextFormat("Nearest Distance: %f", nearestDistance), 10, GetScreenHeight() - 60, 20, DARKGRAY);
+
 			DrawText("WASD: Move, Mouse: Pan, SPACE, CTRL: Up/Down", 10, GetScreenHeight() - 30, 20, DARKGRAY);
 		}
 		EndDrawing();
@@ -332,115 +539,3 @@ main()
 	CloseWindow();
 	return 0;
 }
-
-enum class ENTITY_KIND
-{
-	worldspawn,
-
-	air_bubbles, // Rising bubbles
-
-	ambient_drip,        // Dripping sound
-	ambient_drone,       // Engine/machinery sound
-	ambient_comp_hum,    // Computer background sounds
-	ambient_flouro_buzz, // Flourescent buzzing sound
-	ambient_light_buzz,  // Buzzing sound from light
-	ambient_suck_wind,   // Wind sound
-	ambient_swamp1,      // Frogs croaking
-	ambient_swamp2,      // Slightly different sounding frogs croaking
-	ambient_thunder,     // Thunder sound
-
-	event_lightning, // Lightning (Used to kill Cthon, shareware boss)
-
-	func_door,        // Door
-	func_door_secret, // A door that is triggered to open
-	func_wall,        // A moving wall?
-	func_button,      // A button
-	func_train,       // A platform (moves along a "train")
-	func_plat,        // A lift/elevator
-	func_dm_only,     // A teleporter that only appears in deathmatch
-	func_illusionary, // Creates brush that appears solid, but isn't.
-
-	info_null,                 // Used as a placeholder (removes itself)
-	info_notnull,              // Used as a placeholder (does not remove itself)
-	info_intermission,         // Cameras positioning for intermission (?)
-	info_player_start,         // Main player starting point (only one allowed)
-	info_player_deathmatch,    // A deathmatch start (more than one allowed)
-	info_player_coop,          // A coop player start (more than one allowed)
-	info_player_start2,        // Return point from episode
-	info_teleport_destination, // Gives coords for a teleport destination using a targetname
-
-	// All item_ tags may have a target tag. It triggers the event when the item is picked up.
-
-	item_cells,                    // Ammo for the Thunderbolt
-	item_rockets,                  // Ammo for Rocket/Grenade Launcher
-	item_shells,                   // Ammo for both Shotgun and SuperShotgun
-	item_spikes,                   // Ammo for Perforator and Super Perforator
-	item_weapon,                   // Generic weapon class
-	item_health,                   // Medkit
-	item_artifact_envirosuit,      // Environmental Protection Suit
-	item_artifact_super_damage,    // Quad Damage
-	item_artifact_invulnerability, // Pentagram of Protection
-	item_artifact_invisibility,    // Ring of Shadows (Invisibility)
-	item_armorInv,                 // Red armor
-	item_armor2,                   // Yellow armor
-	item_armor1,                   // Green armor
-	item_key1,                     // Silver Key
-	item_key2,                     // Gold Key
-	item_sigil,                    // Sigil (a rune)
-
-	light,                       // A projected light. No visible lightsource.
-	light_torch_small_walltorch, // Small wall torch (gives off light)
-	light_flame_large_yellow,    // Large yellow fire (gives off light)
-	light_flame_small_yellow,    // Small yellow fire (gives off light)
-	light_flame_small_white,     // Small white fire  (gives off light)
-	light_fluoro,                // Fluorescent light? (Gives off light, humming sound?)
-	light_fluorospark,           // Fluorescent light? (Gives off light, makes sparking sound)
-	light_globe,                 // Light that appears as a globe sprite
-
-	monster_army,          // Grunt
-	monster_dog,           // Attack dog
-	monster_ogre,          // Ogre
-	monster_ogre_marksman, // Ogre (synonymous with monster_ogre)
-	monster_knight,        // Knight
-	monster_zombie,        // Zombie
-	monster_wizard,        // Scragg (Wizard)
-	monster_demon1,        // Fiend (Demon)
-	monster_shambler,      // Shambler
-	monster_boss,          // Cthon (Boss of Shareware Quake)
-	monster_enforcer,      // Enforcer
-	monster_hell_knight,   // Hell Knight
-	monster_shalrath,      // Shalrath
-	monster_tarbaby,       // Slime
-	monster_fish,          // Fish
-	monster_oldone,        // Shubb-Niggurath (requires a misc_teleportrain and a info_intermission)
-
-	misc_fireball,      // Small fireball (gives off light, harms player)
-	misc_explobox,      // Large Nuclear Container
-	misc_explobox2,     // Small Nuclear Container
-	misc_teleporttrain, // Spiked ball needed to telefrag monster_oldone
-
-	path_corner, // Used to define path of func_train platforms
-
-	trap_spikeshooter, // Shoots spikes (nails)
-	trap_shooter,      // Fires nails without needing to be triggered.
-
-	trigger_teleport,       // Teleport (all trigger_ tags are triggered by walkover)
-	trigger_changelevel,    // Changes to another level
-	trigger_setskill,       // Changes skill level
-	trigger_counter,        // Triggers action after it has been triggered count times.
-	trigger_once,           // Triggers action only once
-	trigger_multiple,       // Triggers action (can be retriggered)
-	trigger_onlyregistered, // Triggers only if game is registered (registered == 1)
-	trigger_secret,         // Triggers action and awards secret credit.
-	trigger_monsterjump,    // Causes triggering monster to jump in a direction
-	trigger_relay,          // Allows delayed/multiple actions from one trigger
-	trigger_push,           // Pushes a player in a direction (like a windtunnel)
-	trigger_hurt,           // Hurts whatever touches the trigger
-
-	weapon_supershotgun,    // Super Shotgun
-	weapon_nailgun,         // Perforator
-	weapon_supernailgun,    // Super Perforator
-	weapon_grenadelauncher, // Grenade Launcher
-	weapon_rocketlauncher,  // Rocket Launcher
-	weapon_lightning,       // Lightning Guna
-};

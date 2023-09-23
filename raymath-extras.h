@@ -56,10 +56,30 @@ struct Plane
 	float d;
 };
 
-float
+inline static Plane
+PlaneFromPoints(Vector3 v1, Vector3 v2, Vector3 v3)
+{
+	// Vertices are listed in counter-clockwise order
+	// 0 ---------- 2
+	// |
+	// |
+	// 1
+	Plane p = {};
+	p.n = Vector3Normalize(cross(v2 - v1, v3 - v1));
+	p.d = -dot(p.n, v1);
+	return p;
+}
+
+inline static float
 PlaneSignedDistance(Plane p, Vector3 v)
 {
 	return dot(p.n, v) + p.d;
+}
+
+Vector3
+PlaneProjectPoint(Plane p, Vector3 v)
+{
+	return v - PlaneSignedDistance(p, v) * p.n;
 }
 
 inline static bool
