@@ -78,6 +78,27 @@ PolysFromPlanes(std::span<Plane> planes)
 	return polys;
 }
 
+Vector3
+ReadVector3(std::istream& stream)
+{
+	Vector3 v;
+
+	char token;
+	stream >> token;
+	if (token != '(')
+		throw std::format("Expected '(', found {}", token);
+
+	stream >> v.x >> v.y >> v.z;
+
+	stream >> token;
+	if (token != ')')
+		throw std::format("Expected ')', found {}", token);
+
+	// IDEA: Divide components by scale?
+	// Changing from Quake's (left-handed, Z-Up) system to Raylib's (right-handed, Y-Up) system
+	return {v.x, v.z, -v.y};
+}
+
 Plane
 ReadPlane(std::istream& stream)
 {
@@ -85,30 +106,20 @@ ReadPlane(std::istream& stream)
 
 	Vector3 pv[3];
 	for (auto& v : pv)
-	{
-		stream >> token;
-		if (token != '(')
-			throw std::format("Expected '(', found {}", token);
+		v = ReadVector3(stream);
 
-		// NOTE: Divide components by scale?
-		stream >> v.x >> v.y >> v.z;
-
-		stream >> token;
-		if (token != ')')
-			throw std::format("Expected ')', found {}", token);
-	}
-
-	// skip over the remaining data
+	// Skip over remaining data until the next line
 	char buf[256];
 	stream.getline(buf, sizeof(buf));
 
-	// NOTE: Vertices are listed in clockwise order
+	Plane plane = {};
+	// Vertices are listed in clockwise order
 	// 0 ---------- 1
 	// |
 	// |
 	// 2
-	Plane plane = {};
 	plane.n = Vector3Normalize(cross(pv[2] - pv[0], pv[1] - pv[0]));
+
 	plane.d = -dot(plane.n, pv[0]);
 	return plane;
 }
@@ -147,10 +158,8 @@ ReadBrush(std::istream& stream)
 			throw std::format("Unexpected token {}", token);
 	}
 
-	auto polys = PolysFromPlanes(planes);
-	return Brush{planes, polys};
+	return Brush{planes, PolysFromPlanes(planes)};
 }
-
 
 struct Entity
 {
@@ -264,15 +273,15 @@ int
 main()
 {
 	SetTargetFPS(60);
-	SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
+	SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
 	InitWindow(1600, 900, "quake-level-viewer");
 	DisableCursor(); // Limit cursor to relative movement inside the window
 
 	auto map = LoadMapFile(MAP_SOURCE_DIR "/DM1.MAP");
 
 	Camera camera = {
-		.position = {1.0f, 1.0f, 1.0f},
-		.target = {4.0f, 1.0f, 4.0f},
+		.position = {10.0f, 10.0f, 10.0f},
+		.target = {},
 		.up = {0.0f, 1.0f, 0.0f},
 		.fovy = 45.0f,
 		.projection = CAMERA_PERSPECTIVE,
@@ -308,6 +317,9 @@ main()
 					}
 				}
 				DrawGrid(100 + (int)(Vector3Length(camera.position) / 10), 10.f);
+				DrawRay({.direction = {1, 0, 0}}, RED);
+				DrawRay({.direction = {0, 1, 0}}, GREEN);
+				DrawRay({.direction = {0, 0, 1}}, BLUE);
 			}
 			EndMode3D();
 
