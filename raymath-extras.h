@@ -57,17 +57,51 @@ struct Plane
 };
 
 inline static Plane
-PlaneFromPoints(Vector3 v1, Vector3 v2, Vector3 v3)
+PlaneFromVertices(std::span<Vector3> vertices)
+{
+	Plane plane = {};
+	Vector3 centerOfMass = {};
+	size_t i = 0, j = 0;
+
+	for (i = 0; i < vertices.size(); i++)
+	{
+		j = i + 1;
+		if (j >= vertices.size())
+			j = 0;
+
+		Vector3 vi = vertices[i], vj = vertices[j];
+		plane.n.x += (vi.y - vj.y) * (vi.z + vj.z);
+		plane.n.y += (vi.z - vj.z) * (vi.x + vj.x);
+		plane.n.z += (vi.x - vj.x) * (vi.y + vj.y);
+
+		centerOfMass = centerOfMass + vi;
+	}
+
+	if (Vector3Equals(plane.n, {}) || Vector3Length(plane.n) <= EPSILON)
+		return Plane{};
+
+	plane.n = Vector3Normalize(plane.n);
+
+	centerOfMass = centerOfMass / vertices.size();
+	plane.d = -dot(centerOfMass, plane.n);
+
+	return plane;
+}
+
+inline static Plane
+PlaneFromTriangle(Vector3 v1, Vector3 v2, Vector3 v3)
 {
 	// Vertices are listed in counter-clockwise order
 	// 0 ---------- 2
 	// |
 	// |
 	// 1
-	Plane p = {};
-	p.n = Vector3Normalize(cross(v2 - v1, v3 - v1));
-	p.d = -dot(p.n, v1);
-	return p;
+	// Plane plane = {};
+	// plane.n = Vector3Normalize(cross(v2 - v1, v3 - v1));
+	// plane.d = -dot(v1, plane.n);
+	// return plane;
+	Vector3 vertices[3] = {v1, v2, v3};
+	return PlaneFromVertices(vertices);
 }
 
 inline static float

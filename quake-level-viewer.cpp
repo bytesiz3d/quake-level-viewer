@@ -28,6 +28,32 @@ struct Poly
 	BoundingBox bbox;
 };
 
+std::vector<Vector3>
+PolySortVertices(const Poly& poly, Vector3 planeNormal)
+{
+	std::vector<Vector3> vertices(poly.v.begin(), poly.v.end());
+	Vector3 center = std::reduce(vertices.begin(), vertices.end()) / vertices.size();
+
+	for (size_t n = 0; n < vertices.size() - 2; n++)
+	{
+		Plane orthogonalPlane = PlaneFromTriangle(vertices[n], center, center + planeNormal);
+		Vector3 vN = vertices[n] - center;
+
+		auto nearestVertex = std::min_element(vertices.begin() + (n + 1), vertices.end(), [=](Vector3 a, Vector3 b) {
+			if (PlaneSignedDistance(orthogonalPlane, a) < 0) // On opposite sides of the plane from vertices[n]
+				return false;
+			if (PlaneSignedDistance(orthogonalPlane, b) < 0) // On opposite sides of the plane from vertices[n]
+				return true;
+
+			Vector3 vA = a - center, vB = b - center;
+			return Vector3Angle(vN, vA) < Vector3Angle(vN, vB);
+		});
+
+		std::swap(vertices[n + 1], *nearestVertex);
+	}
+	return vertices;
+}
+
 struct Brush
 {
 	std::vector<Plane> planes;
@@ -222,6 +248,13 @@ main()
 	return 0;
 }
 
+std::vector<Brush>
+CSGUnion(std::span<Brush> brushes)
+{
+	// TODO: Implement
+	return {};
+}
+
 std::vector<Poly>
 PolysFromPlanes(std::span<Plane> planes)
 {
@@ -256,10 +289,20 @@ PolysFromPlanes(std::span<Plane> planes)
 		}
 	}
 
-	for (auto& poly : polys)
+	for (size_t i = 0; i < polys.size(); i++)
 	{
+		auto& poly = polys[i];
+		auto& plane = planes[i];
+
 		if (poly.v.empty())
 			continue;
+
+		poly.v = PolySortVertices(poly, plane.n);
+		Vector3 polyNormal = PlaneFromVertices(poly.v).n;
+		if (dot(plane.n, polyNormal) < 0) // opposite sides
+			std::reverse(poly.v.begin(), poly.v.end());
+
+		// TODO: Constructive Solid Geometry Union (CSGUnion)
 
 		Vector3 minVertex = poly.v[0];
 		Vector3 maxVertex = poly.v[0];
@@ -310,7 +353,7 @@ ReadPlane(std::istream& stream)
 	stream.getline(buf, sizeof(buf));
 
 	// Changing from Quake's (left-handed, Z-Up) system to Raylib's (right-handed, Y-Up) system
-	return PlaneFromPoints(pv[0], pv[2], pv[1]);
+	return PlaneFromTriangle(pv[0], pv[2], pv[1]);
 }
 
 Brush
