@@ -14,7 +14,8 @@ add_subdirectory(thirdparty/raylib)
 
 add_executable(quake-level-viewer main.cpp)
 target_link_libraries(quake-level-viewer raylib)
+target_compile_options(quake-level-viewer PUBLIC /ZI)
 target_compile_definitions(quake-level-viewer PRIVATE
-	MAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}/quake_map_source"
+	MAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}/maps"
 	VS_PATH="${CMAKE_SOURCE_DIR}/lighting.vs"
 	FS_PATH="${CMAKE_SOURCE_DIR}/lighting.fs")

@@ -3,8 +3,8 @@
 // Input vertex attributes (from vertex shader)
 in vec3 fragPosition;
 in vec2 fragTexCoord;
-//in vec4 fragColor;
 in vec3 fragNormal;
+in vec4 fragColor;
 
 // Input uniform values
 uniform sampler2D texture0;
@@ -81,6 +81,7 @@ void main()
 
     finalColor  = texelColor * colDiffuse * vec4(lightDot, 1.0);
     finalColor += texelColor * colDiffuse * vec4(ambient, 1.0);
+    finalColor *= fragColor;
 
     // Gamma correction
     finalColor = pow(finalColor, vec4(1.0/2.2));
