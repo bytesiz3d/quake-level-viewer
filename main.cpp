@@ -409,8 +409,8 @@ ReadVector3(std::istream &stream)
 		throw TextFormat("Expected ')', found %c", token);
 
 	// IDEA: Divide components by scale?
-	// Changing from Quake's (left-handed, Z-Up) system to Raylib's (right-handed, Y-Up) system
-	return {v.x, v.z, v.y};
+	// Changing from Quake's (right-handed, Z-Up) system to Raylib's (right-handed, Y-Up) system
+	return {-v.x, v.z, v.y};
 }
 
 Face
@@ -422,8 +422,8 @@ ReadFace(std::istream& stream)
 	for (auto& v : pv)
 		v = ReadVector3(stream);
 	
-	// Changing from Quake's (left-handed, Z-Up) system to Raylib's (right-handed, Y-Up) system
-	f.plane = PlaneFromTriangle(pv[0], pv[1], pv[2]);
+	// Points are listed in a clockwise order
+	f.plane = PlaneFromTriangle(pv[2], pv[1], pv[0]);
 
 	stream >> f.texture_name;
 	stream >> f.texture_uv.x >> f.texture_uv.y;
