@@ -264,12 +264,12 @@ std::pair<Vector3, Vector3>
 TextureAxesFromPlane(Plane p)
 {
 	Vector3 baseAxis[] = {
-		{ 0, 1, 0}, { 1, 0, 0}, { 0, 0, 1}, // floor
-		{ 0,-1, 0}, { 1, 0, 0}, { 0, 0,-1}, // ceiling
-		{ 1, 0, 0}, { 0, 0,-1}, { 0,-1, 0}, // west wall
-		{-1, 0, 0}, { 0, 0, 1}, { 0,-1, 0}, // east wall
-		{ 0, 0, 1}, { 1, 0, 0}, { 0,-1, 0},	// south wall
-		{ 0, 0,-1}, {-1, 0, 0}, { 0,-1, 0}, // north wall
+		{ 0, 0, 1}, {1,0,0}, {0,-1, 0}, // floor
+		{ 0, 0,-1}, {1,0,0}, {0,-1, 0}, // ceiling
+		{ 1, 0, 0}, {0,1,0}, {0, 0,-1}, // west wall
+		{-1, 0, 0}, {0,1,0}, {0, 0,-1}, // east wall
+		{ 0, 1, 0}, {1,0,0}, {0, 0,-1}, // south wall
+		{ 0,-1, 0}, {1,0,0}, {0, 0,-1}, // north wall
 	};
 
 	Vector3 uNormal, vNormal;
@@ -408,9 +408,7 @@ ReadVector3(std::istream &stream)
 	if (token != ')')
 		throw TextFormat("Expected ')', found %c", token);
 
-	// IDEA: Divide components by scale?
-	// Changing from Quake's (right-handed, Z-Up) system to Raylib's (right-handed, Y-Up) system
-	return {-v.x, v.z, v.y};
+	return v;
 }
 
 Face
