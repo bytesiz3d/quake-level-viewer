@@ -127,11 +127,11 @@ main()
 			{
 				for (auto model : models)
 				{
+					model.materials[0].shader = shader;
 					DrawModel(model, {}, 1.f, WHITE);
 					if (enable_lines)
 						DrawModelWires(model, {}, 1.f, BLACK);
 				}
-				
 
 				// DrawGrid(100 + (int)(Vector3Length(camera.position) / 10), 10.f);
 				// DrawRay({.direction = {1, 0, 0}}, RED);
@@ -560,10 +560,10 @@ GenMeshPolygons(std::span<const Poly> polys)
 	float *texcoords = mesh.texcoords;
 	for (auto &p : polys)
 	{
-		for (const auto &v : p.positions)
+		for (const auto &uv : p.texture_uvs)
 		{
-			*(texcoords++) = 0.f;
-			*(texcoords++) = 0.f;
+			*(texcoords++) = uv.x;
+			*(texcoords++) = uv.y;
 		}
 	}
 

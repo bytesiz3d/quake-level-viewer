@@ -50,32 +50,24 @@ void main()
 {
     // Texel color fetching from texture sampler
     vec4 texelColor = texture(texture0, fragTexCoord);
-    vec3 lightDot = vec3(0.0);
     vec3 normal = normalize(fragNormal);
-    vec3 viewD = normalize(viewPos - fragPosition);
-    vec3 specular = vec3(0.0);
-    vec3 ambient = vec3(0.01);
+    vec3 ambient = vec3(0.1);
 
     // NOTE: Implement here your fragment shader code
 
+    vec3 lightDot = vec3(0.0);
     for (int i = 0; i < MAX_LIGHTS; i++)
     {
         if (lights[i].enabled == 1)
         {
             vec3 light = vec3(0.0);
-
             if (lights[i].type == LIGHT_DIRECTIONAL)
-            {
                 light = -normalize(lights[i].target - lights[i].position);
-            }
-
-            if (lights[i].type == LIGHT_POINT)
-            {
+            else if (lights[i].type == LIGHT_POINT)
                 light = normalize(lights[i].position - fragPosition);
-            }
 
             float NdotL = abs(dot(normal, light));
-            lightDot += lights[i].color.rgb * NdotL * attenuate_light(distance(lights[i].position, fragPosition));
+            lightDot += lights[i].color.rgb * NdotL;
         }
     }
 
