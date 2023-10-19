@@ -93,7 +93,7 @@
 //------------------------------------------------------------------------------------
 
 // Enable OpenGL Debug Context (only available on OpenGL 4.3)
-//#define RLGL_ENABLE_OPENGL_DEBUG_CONTEXT       1
+#define RLGL_ENABLE_OPENGL_DEBUG_CONTEXT       1
 
 // Show OpenGL extensions and capabilities detailed logs on init
 //#define RLGL_SHOW_GL_DETAILS_INFO              1
@@ -108,7 +108,7 @@
 #define RL_MAX_SHADER_LOCATIONS               32      // Maximum number of shader locations supported
 
 #define RL_CULL_DISTANCE_NEAR               0.01      // Default projection matrix near cull distance
-#define RL_CULL_DISTANCE_FAR              1000.0      // Default projection matrix far cull distance
+#define RL_CULL_DISTANCE_FAR             10000.0      // Default projection matrix far cull distance
 
 // Default shader vertex attribute names to set location points
 // NOTE: When a new shader is loaded, the following locations are tried to be set for convenience

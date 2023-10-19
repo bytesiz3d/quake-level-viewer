@@ -73,14 +73,13 @@ main()
 	SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
 	InitWindow(1200, 800, "quake-level-viewer");
 	DisableCursor();  // Limit cursor to relative movement inside the window
-	rlDisableBackfaceCulling();
-	rlEnableDepthMask();
-	
+	rlEnableBackfaceCulling();
+
 	Camera camera = {
 		.position = {10.0f, 10.0f, 10.0f},
 		.target = {},
 		.up = {0.0f, 1.0f, 0.0f},
-		.fovy = 45.0f,
+		.fovy = 90.f,
 		.projection = CAMERA_PERSPECTIVE,
 	};
 
@@ -88,11 +87,11 @@ main()
 	shader.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(shader, "viewPos");
 
 	Light cameraLight = CreateLight(LIGHT_POINT, camera.position, {}, WHITE, shader);
-	auto models = LoadModelsFromMapFile(MAP_SOURCE_DIR "/START.MAP");
+	auto models = LoadModelsFromMapFile(MAP_SOURCE_DIR "/DM4.MAP");
 
 	while (!WindowShouldClose())
 	{
-		static bool enable_lines = true;
+		static bool enable_lines = false;
 		static bool enable_cursor = false;
 		
 		if (IsFileDropped())
@@ -265,12 +264,12 @@ std::pair<Vector3, Vector3>
 TextureAxesFromPlane(Plane p)
 {
 	Vector3 baseAxis[] = {
-		{0,0,1}, {1,0,0}, {0,-1,0},	 // floor
-		{0,0,-1}, {1,0,0}, {0,-1,0}, // ceiling
-		{1,0,0}, {0,1,0}, {0,0,-1},	 // west wall
-		{-1,0,0}, {0,1,0}, {0,0,-1}, // east wall
-		{0,1,0}, {1,0,0}, {0,0,-1},	 // south wall
-		{0,-1,0}, {1,0,0}, {0,0,-1}, // north wall
+		{ 0, 1, 0}, { 1, 0, 0}, { 0, 0, 1}, // floor
+		{ 0,-1, 0}, { 1, 0, 0}, { 0, 0,-1}, // ceiling
+		{ 1, 0, 0}, { 0, 0,-1}, { 0,-1, 0}, // west wall
+		{-1, 0, 0}, { 0, 0, 1}, { 0,-1, 0}, // east wall
+		{ 0, 0, 1}, { 1, 0, 0}, { 0,-1, 0},	// south wall
+		{ 0, 0,-1}, {-1, 0, 0}, { 0,-1, 0}, // north wall
 	};
 
 	Vector3 uNormal, vNormal;
@@ -323,12 +322,11 @@ PolysFromFaces(const Texture_Map &texmap, std::span<const Face> faces)
 		{
 			for (size_t k = j + 1; k < faces.size(); k++)
 			{
-				bool legal = true;
-
 				auto [vertex, ok] = GetIntersectionPlanes(faces[i].plane, faces[j].plane, faces[k].plane);
 				if (ok == false)
 					continue;
 
+				bool legal = true;
 				for (size_t m = 0; m < faces.size(); m++)
 				{
 					if (PlaneSignedDistance(faces[m].plane, vertex) > 0)
@@ -364,6 +362,7 @@ PolysFromFaces(const Texture_Map &texmap, std::span<const Face> faces)
 	}
 
 	// Calculate texture coordinates
+	// TODO: Normalize texture coordinates?
 	for (size_t f = 0; f < polys.size(); f++)
 	{
 		auto& poly = polys[f];
@@ -411,7 +410,7 @@ ReadVector3(std::istream &stream)
 
 	// IDEA: Divide components by scale?
 	// Changing from Quake's (left-handed, Z-Up) system to Raylib's (right-handed, Y-Up) system
-	return {v.x, v.z, -v.y};
+	return {v.x, v.z, v.y};
 }
 
 Face
@@ -424,7 +423,7 @@ ReadFace(std::istream& stream)
 		v = ReadVector3(stream);
 	
 	// Changing from Quake's (left-handed, Z-Up) system to Raylib's (right-handed, Y-Up) system
-	f.plane = PlaneFromTriangle(pv[0], pv[2], pv[1]);
+	f.plane = PlaneFromTriangle(pv[0], pv[1], pv[2]);
 
 	stream >> f.texture_name;
 	stream >> f.texture_uv.x >> f.texture_uv.y;

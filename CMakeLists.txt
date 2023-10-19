@@ -9,12 +9,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
 project(quake-level-viewer LANGUAGES C CXX)
 
 set(OPENGL_VERSION "4.3")
-add_compile_definitions(RLGL_ENABLE_OPENGL_DEBUG_CONTEXT=1)
 add_subdirectory(thirdparty/raylib)
 
 add_executable(quake-level-viewer main.cpp)
 target_link_libraries(quake-level-viewer raylib)
 target_compile_options(quake-level-viewer PUBLIC /ZI)
+target_link_options(quake-level-viewer PUBLIC /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup)
 target_compile_definitions(quake-level-viewer PRIVATE
 	MAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}/maps"
 	VS_PATH="${CMAKE_SOURCE_DIR}/lighting.vs"
