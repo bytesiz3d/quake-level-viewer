@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 #include <filesystem>
+#include <span>
 
 #include <assert.h>
 
@@ -643,51 +644,52 @@ VerticesNormal(Vector3 a, Vector3 b, Vector3 c)
 }
 
 Mesh
-GenMeshFace(BSP_File& map, Face face)
+GenMeshFaces(BSP_File& map, std::span<const Face> faces)
 {
-	TexInfo texinfo = map.texinfo(face.texinfo_id);
-	Miptex miptex = map.miptex(texinfo.miptex_id);
-
-	std::vector<Vector3> face_vertices{};
-	std::vector<Vector2> face_texcoords{};
-
-	for (size_t i = 0; i < face.ledge_num; ++i)
-	{
-		int16_t ledge = map.listedge(face.ledge_id + i);
-		Edge edge = map.edge(labs(ledge));
-
-		Vector3 vertex = map.vertex(edge.vs);
-		if (ledge < 0)
-			vertex = map.vertex(edge.ve);
-		face_vertices.push_back(vertex);
-
-		Vector2 uv{
-			.x = (Vector3DotProduct(vertex, texinfo.u_axis) + texinfo.u_offset) / miptex.width,
-			.y = (Vector3DotProduct(vertex, texinfo.v_axis) + texinfo.v_offset) / miptex.height,
-		};
-		face_texcoords.push_back(uv);
-	}
-	assert(face_vertices.empty() == false);
-
 	static_assert(sizeof(Vector3) == 3 * sizeof(float));
 	static_assert(sizeof(Vector2) == 2 * sizeof(float));
 	std::vector<Vector3> vertices{};
 	std::vector<Vector2> texcoords{};
 	std::vector<Vector3> normals{};
-	
-	for (size_t i = face_vertices.size() - 2; i > 0; --i)
+
+	for (const Face& face : faces)
 	{
-		vertices.push_back(face_vertices.back());
-		vertices.push_back(face_vertices[i]);
-		vertices.push_back(face_vertices[i - 1]);
+		TexInfo texinfo = map.texinfo(face.texinfo_id);
+		Miptex miptex = map.miptex(texinfo.miptex_id);
 
-		texcoords.push_back(face_texcoords.back());
-		texcoords.push_back(face_texcoords[i]);
-		texcoords.push_back(face_texcoords[i - 1]);
+		std::vector<Vector3> face_vertices{};
+		std::vector<Vector2> face_texcoords{};
 
-		Vector3 normal = VerticesNormal(face_vertices.back(), face_vertices[i], face_vertices[i - 1]);
-		for (size_t v = 0; v < 3; ++v)
-			normals.push_back(normal);
+		for (size_t i = 0; i < face.ledge_num; ++i)
+		{
+			int16_t ledge = map.listedge(face.ledge_id + i);
+			Edge edge = map.edge(labs(ledge));
+
+			Vector3 vertex = map.vertex(ledge >= 0 ? edge.vs : edge.ve);
+			face_vertices.push_back(vertex);
+
+			Vector2 uv{
+				.x = (Vector3DotProduct(vertex, texinfo.u_axis) + texinfo.u_offset) / miptex.width,
+				.y = (Vector3DotProduct(vertex, texinfo.v_axis) + texinfo.v_offset) / miptex.height,
+			};
+			face_texcoords.push_back(uv);
+		}
+		assert(face_vertices.empty() == false);
+
+		for (size_t i = face_vertices.size() - 2; i > 0; --i)
+		{
+			vertices.push_back(face_vertices.back());
+			vertices.push_back(face_vertices[i]);
+			vertices.push_back(face_vertices[i - 1]);
+
+			texcoords.push_back(face_texcoords.back());
+			texcoords.push_back(face_texcoords[i]);
+			texcoords.push_back(face_texcoords[i - 1]);
+
+			Vector3 normal = VerticesNormal(face_vertices.back(), face_vertices[i], face_vertices[i - 1]);
+			for (size_t v = 0; v < 3; ++v)
+				normals.push_back(normal);
+		}
 	}
 	
 	Mesh mesh{};
@@ -731,9 +733,9 @@ LoadModelsFromBSPFile(const std::filesystem::path& path)
 		}
 	}
 	
-	std::unordered_map<std::string, Texture> texmap{};
+	std::unordered_map<std::string, Texture> texture_name_to_object{};
+	std::unordered_map<std::string, std::vector<Face>> texture_name_to_face_list{}; // Group faces by texture to reduce draw calls
 
-	std::vector<Model> models{};
 	for (size_t leaf_id : leaves)
 	{
 		Leaf leaf = map.leaf(leaf_id);
@@ -741,16 +743,16 @@ LoadModelsFromBSPFile(const std::filesystem::path& path)
 		{
 			uint16_t face_id = map.listface(leaf.listface_id + i);
 			Face face = map.face(face_id);
-		
-			Mesh mesh = GenMeshFace(map, face);
-			Model model = LoadModelFromMesh(GenMeshFace(map, face));
 			
 			TexInfo texinfo = map.texinfo(face.texinfo_id);
 			Miptex miptex = map.miptex(texinfo.miptex_id);
 			
-			if (texmap.contains(miptex.name) == false)
+			std::string texname = miptex.name;
+			texture_name_to_face_list[texname].push_back(face);
+			
+			if (texture_name_to_object.contains(texname) == false)
 			{
-				auto color_data = map.miptex_data(texinfo.miptex_id, 0);
+				std::vector<Color_RGB8> color_data = map.miptex_data(texinfo.miptex_id, 0);
 				Image texture_image = {
 					.data = color_data.data(),
 					.width = (int)miptex.width,
@@ -759,12 +761,18 @@ LoadModelsFromBSPFile(const std::filesystem::path& path)
 					.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8,
 				};
 
-				texmap[miptex.name] = LoadTextureFromImage(texture_image);
-				ExportImage(texture_image, TextFormat("%s.png", miptex.name));
+				texture_name_to_object[texname] = LoadTextureFromImage(texture_image);
 			}
-			model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = texmap.at(miptex.name);
-			models.push_back(model);
 		}
+	}
+
+	std::vector<Model> models{};
+	for (auto& [texname, faces] : texture_name_to_face_list)
+	{
+		Mesh mesh = GenMeshFaces(map, faces);
+		Model model = LoadModelFromMesh(mesh);
+		model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = texture_name_to_object.at(texname);
+		models.push_back(model);
 	}
 	return models;
 }
