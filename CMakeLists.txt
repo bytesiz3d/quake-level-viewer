@@ -20,5 +20,5 @@ target_compile_options(quake-level-viewer PUBLIC /ZI)
 target_link_options(quake-level-viewer PUBLIC /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup)
 target_compile_definitions(quake-level-viewer PRIVATE
 	MAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}/maps"
-	VS_PATH="${CMAKE_SOURCE_DIR}/lighting.vs.glsl"
-	FS_PATH="${CMAKE_SOURCE_DIR}/lighting.fs.glsl")
+	VS_PATH="${CMAKE_SOURCE_DIR}/lighting.vert"
+	FS_PATH="${CMAKE_SOURCE_DIR}/lighting.frag")
