@@ -506,10 +506,10 @@ ReadEntity(std::istream& stream)
 
 struct BSP_File
 {
-	std::ifstream bsp_file;
+	std::istream& bsp_file;
 	Header header;
 
-	BSP_File(std::ifstream &&_file) : bsp_file(std::move(_file))
+	BSP_File(std::ifstream& _file) : bsp_file(_file)
 	{
 		header = ReadT<Header>(bsp_file);
 	}
@@ -707,7 +707,8 @@ GenMeshFace(BSP_File& map, Face face)
 std::vector<Model>
 LoadModelsFromBSPFile(const std::filesystem::path& path)
 {
-	BSP_File map{std::ifstream{path, std::ios::binary}};
+	std::ifstream bsp_file{path, std::ios::binary};
+	BSP_File map{bsp_file};
 
 	Node bsp_root = map.node(map.model(0).bsp_node_id);
 	std::vector<Node> nodes{bsp_root};
