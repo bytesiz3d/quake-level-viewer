@@ -16,8 +16,8 @@ add_subdirectory(thirdparty/rlImGui)
 
 add_executable(quake-level-viewer main.cpp bsp.cpp map.cpp)
 target_link_libraries(quake-level-viewer raylib imgui rlImGui)
-target_compile_options(quake-level-viewer PUBLIC /ZI)
-target_link_options(quake-level-viewer PUBLIC /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup)
+target_compile_options(quake-level-viewer PUBLIC $<$<CONFIG:Debug>:/ZI>)
+target_link_options(quake-level-viewer PUBLIC $<$<CONFIG:Release>:/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup>)
 target_compile_definitions(quake-level-viewer PRIVATE
 	MAP_SOURCE_DIR="${CMAKE_SOURCE_DIR}/maps"
 	VS_PATH="${CMAKE_SOURCE_DIR}/lighting.vert"
