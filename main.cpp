@@ -114,10 +114,6 @@ main()
 		if (enable_cursor == false)
 			UpdateCamera(&camera, CAMERA_FREE);
 
-		static bool enable_wireframe = false;
-		if (IsKeyPressed(KEY_L))
-			enable_wireframe = !enable_wireframe;
-
 		static bool enable_imgui = true;
 		if (IsKeyPressed(KEY_I))
 			enable_imgui = !enable_imgui;
@@ -128,18 +124,22 @@ main()
 		cameraLight.position = camera.position;
 		UpdateLightValues(shader, cameraLight);
 
+		static bool enable_wireframe = false;
 		BeginDrawing();
 		{
 			ClearBackground(GRAY);
 
 			BeginMode3D(camera);
 			{
-				for (auto model : models)
+				for (Model model : models)
 				{
 					model.materials[0].shader = shader;
 					DrawModel(model, {}, 1.f, WHITE);
 					if (enable_wireframe)
+					{
+						model.materials[0].shader = {rlGetShaderIdDefault(), rlGetShaderLocsDefault()};
 						DrawModelWires(model, {}, 1.f, BLACK);
+					}
 				}
 			}
 			EndMode3D();
@@ -158,12 +158,17 @@ main()
 					ImGui::BulletText("Q/E:         Roll");
 					ImGui::BulletText("R:           Reset Camera Roll");
 					ImGui::BulletText("Mouse:       Pan");
-					ImGui::BulletText("L:           Toggle Wireframe");
 					ImGui::BulletText("I:           Toggle UI");
 					ImGui::BulletText("RMB:         Toggle Cursor");
 
 					if (ImGui::SliderInt("Light Power", &lightPower, 1, 50))
 						SetShaderValue(shader, GetShaderLocation(shader, "lightPower"), &lightPower, SHADER_UNIFORM_INT);
+
+					ImGui::Checkbox("Wireframe", &enable_wireframe);
+
+					static float line_width = rlGetLineWidth();
+					if (ImGui::SliderFloat("Line Width", &line_width, 0.1f, 10))
+						rlSetLineWidth(line_width);
 				}
 				ImGui::End();
 				rlImGuiEnd();
