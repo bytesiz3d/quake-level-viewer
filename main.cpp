@@ -3,6 +3,7 @@
 #include <rcamera.h>
 #include <rlgl.h>
 
+// @REF https://github.com/raysan5/raylib/blob/master/examples/shaders/rlights.h
 #define RLIGHTS_IMPLEMENTATION
 #include <rlights.h>
 
@@ -18,10 +19,10 @@ LoadModelsFromBSPFile(const std::filesystem::path& path);
 int
 main()
 {
-	// SetTraceLogLevel(LOG_DEBUG);
 	SetTargetFPS(60);
 	SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
 	InitWindow(1200, 800, "quake-level-viewer");
+	SetWindowState(FLAG_WINDOW_MAXIMIZED);
 	rlEnableBackfaceCulling();
 	rlImGuiSetup(false);
 
@@ -49,15 +50,17 @@ main()
 		long currentShaderModTime = std::max(GetFileModTime(VS_PATH), GetFileModTime(FS_PATH));
 		if (currentShaderModTime != shaderModTime)
 		{
-			// Try reloading updated shader
+			// Try hot-reloading updated shader
 			Shader updatedShader = LoadShader(VS_PATH, FS_PATH);
 			if (updatedShader.id != rlGetShaderIdDefault()) // It was correctly loaded
 			{
 				UnloadShader(shader);
 				shader = updatedShader;
 				shader.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(shader, "viewPos");
+				
 				lightsCount = 0;
 				cameraLight = CreateLight(LIGHT_POINT, camera.position, {}, WHITE, shader);
+				SetShaderValue(shader, GetShaderLocation(shader, "lightPower"), &lightPower, SHADER_UNIFORM_INT);
 			}
 
 			shaderModTime = currentShaderModTime;
