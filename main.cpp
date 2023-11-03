@@ -157,6 +157,7 @@ main()
 				ImGuiWindowFlags overlayFlags = ImGui::SetNextWindowOverlay();
 				if (ImGui::Begin("Controls", nullptr, overlayFlags))
 				{
+					ImGui::Text("Drag and Drop a .BSP file onto the window to view it.");
 					ImGui::Text("Current File: %s", currentFile.c_str());
 					ImGui::Separator();
 

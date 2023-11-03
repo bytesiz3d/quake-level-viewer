@@ -452,6 +452,3 @@ FodyWeavers.xsd
 [Bbuild]*/
 .vscode/settings.json
 maps/*
-!maps/**/*.bsp
-!maps/**/*.wad
-!maps/**/*.map
