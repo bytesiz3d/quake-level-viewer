@@ -93,7 +93,7 @@
 //------------------------------------------------------------------------------------
 
 // Enable OpenGL Debug Context (only available on OpenGL 4.3)
-#define RLGL_ENABLE_OPENGL_DEBUG_CONTEXT       1
+//#define RLGL_ENABLE_OPENGL_DEBUG_CONTEXT       1
 
 // Show OpenGL extensions and capabilities detailed logs on init
 //#define RLGL_SHOW_GL_DETAILS_INFO              1

@@ -4,13 +4,13 @@
 #include <rlgl.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <set>
+#include <span>
 #include <unordered_map>
 #include <vector>
-#include <filesystem>
-#include <span>
 
 #include <assert.h>
 
@@ -265,7 +265,7 @@ struct BSP_File
 	_read(Dir_Entry dir, size_t idx)
 	{
 		assert(idx < dir.size / sizeof(T));
-		bsp_file.clear(0);
+		bsp_file.clear();
 		bsp_file.seekg(dir.offset);
 		return ReadT<T>(bsp_file, idx);
 	}
@@ -273,7 +273,7 @@ struct BSP_File
 	std::vector<Entity>
 	entities()
 	{
-		bsp_file.clear(0);
+		bsp_file.clear();
 		bsp_file.seekg(header.entities.offset);
 
 		std::vector<Entity> entities{};
@@ -292,7 +292,7 @@ struct BSP_File
 	int32_t
 	miptex_count()
 	{
-		bsp_file.clear(0);
+		bsp_file.clear();
 		bsp_file.seekg(header.miptex.offset);
 		return ReadT<int32_t>(bsp_file);
 	}
@@ -439,7 +439,7 @@ GenMeshFaces(BSP_File& map, std::span<const Face> faces)
 				normals.push_back(normal);
 		}
 	}
-	
+
 	Mesh mesh{};
 	mesh.vertexCount = vertices.size();
 	mesh.vertices = (float*)vertices.data();
@@ -480,7 +480,7 @@ LoadModelsFromBSPFile(const std::filesystem::path& path)
 			}
 		}
 	}
-	
+
 	std::unordered_map<std::string, Texture> texture_name_to_object{};
 	std::unordered_map<std::string, std::vector<Face>> texture_name_to_face_list{}; // Group faces by texture to reduce draw calls
 
@@ -491,13 +491,13 @@ LoadModelsFromBSPFile(const std::filesystem::path& path)
 		{
 			uint16_t face_id = map.listface(leaf.listface_id + i);
 			Face face = map.face(face_id);
-			
+
 			TexInfo texinfo = map.texinfo(face.texinfo_id);
 			Miptex miptex = map.miptex(texinfo.miptex_id);
-			
+
 			std::string texname = miptex.name;
 			texture_name_to_face_list[texname].push_back(face);
-			
+
 			if (texture_name_to_object.contains(texname) == false)
 			{
 				std::vector<Color_RGB8> color_data = map.miptex_data(texinfo.miptex_id, 0);

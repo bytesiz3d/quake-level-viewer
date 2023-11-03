@@ -12,6 +12,7 @@
 
 #include <filesystem>
 #include <set>
+#include <vector>
 
 std::vector<Model>
 LoadModelsFromBSPFile(const std::filesystem::path& path);
