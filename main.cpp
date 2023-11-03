@@ -16,6 +16,23 @@
 std::vector<Model>
 LoadModelsFromBSPFile(const std::filesystem::path& path);
 
+namespace ImGui
+{
+	ImGuiWindowFlags
+	SetNextWindowOverlay()
+	{
+		const ImGuiViewport* viewport = GetMainViewport();
+		ImVec2 work_pos = viewport->WorkPos; // Use work area to avoid menu-bar/task-bar, if any!
+		ImVec2 work_size = viewport->WorkSize;
+		const float PAD = 10.0f;
+		ImVec2 window_pos = {work_pos.x + PAD, work_pos.y + PAD};
+		SetNextWindowPos(window_pos, ImGuiCond_Always);
+
+		SetNextWindowBgAlpha(0.8f); // Transparent background
+		return ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
+	}
+}
+
 int
 main()
 {
@@ -26,8 +43,9 @@ main()
 	rlEnableBackfaceCulling();
 	rlImGuiSetup(false);
 
-	std::vector<Model> models = LoadModelsFromBSPFile(MAP_SOURCE_DIR "/bsp/dm4.bsp");
-	
+	std::string currentFile = MAP_SOURCE_DIR "/bsp/dm4.bsp";
+	std::vector<Model> models = LoadModelsFromBSPFile(currentFile);
+
 	long shaderModTime = std::max(GetFileModTime(VS_PATH), GetFileModTime(FS_PATH));
 	Shader shader = LoadShader(VS_PATH, FS_PATH);
 	shader.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(shader, "viewPos");
@@ -57,7 +75,7 @@ main()
 				UnloadShader(shader);
 				shader = updatedShader;
 				shader.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(shader, "viewPos");
-				
+
 				lightsCount = 0;
 				cameraLight = CreateLight(LIGHT_POINT, camera.position, {}, WHITE, shader);
 				SetShaderValue(shader, GetShaderLocation(shader, "lightPower"), &lightPower, SHADER_UNIFORM_INT);
@@ -69,7 +87,7 @@ main()
 		if (IsFileDropped())
 		{
 			FilePathList droppedFiles = LoadDroppedFiles();
-			
+
 			std::set<decltype(Texture::id)> textures{};
 			for (Model model : models)
 			{
@@ -77,9 +95,11 @@ main()
 				textures.insert(texture.id);
 			}
 			std::for_each(std::begin(textures), std::end(textures), rlUnloadTexture);
-			
+
 			std::for_each(models.begin(), models.end(), UnloadModel);
-			models = LoadModelsFromBSPFile(droppedFiles.paths[0]);
+
+			currentFile = droppedFiles.paths[0];
+			models = LoadModelsFromBSPFile(currentFile);
 			UnloadDroppedFiles(droppedFiles);
 		}
 
@@ -101,14 +121,17 @@ main()
 		static bool enable_imgui = true;
 		if (IsKeyPressed(KEY_I))
 			enable_imgui = !enable_imgui;
-		
+
+		if (IsKeyPressed(KEY_R))
+			camera.up = {0.0, 1.0, 0.0};
+
 		cameraLight.position = camera.position;
 		UpdateLightValues(shader, cameraLight);
 
 		BeginDrawing();
 		{
 			ClearBackground(GRAY);
-			
+
 			BeginMode3D(camera);
 			{
 				for (auto model : models)
@@ -124,11 +147,16 @@ main()
 			if (enable_imgui)
 			{
 				rlImGuiBegin();
-				if (ImGui::Begin("Controls"))
+				ImGuiWindowFlags overlayFlags = ImGui::SetNextWindowOverlay();
+				if (ImGui::Begin("Controls", nullptr, overlayFlags))
 				{
-					ImGui::TextWrapped("FPS: %d", GetFPS());
+					ImGui::Text("Current File: %s", currentFile.c_str());
+					ImGui::Separator();
+
 					ImGui::BulletText("WASD:        Move");
 					ImGui::BulletText("SPACE/LCTRL: Up/Down");
+					ImGui::BulletText("Q/E:         Roll");
+					ImGui::BulletText("R:           Reset Camera Roll");
 					ImGui::BulletText("Mouse:       Pan");
 					ImGui::BulletText("L:           Toggle Wireframe");
 					ImGui::BulletText("I:           Toggle UI");
