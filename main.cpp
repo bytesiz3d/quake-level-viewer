@@ -45,7 +45,13 @@ main()
 	rlImGuiSetup(false);
 
 	std::string currentFile = MAP_SOURCE_DIR "/bsp/dm4.bsp";
-	std::vector<Model> models = LoadModelsFromBSPFile(currentFile);
+	std::vector<Model> models;
+	try {
+		models = LoadModelsFromBSPFile(currentFile);
+	}
+	catch (...) {
+		currentFile = "";
+	}
 
 	long shaderModTime = std::max(GetFileModTime(VS_PATH), GetFileModTime(FS_PATH));
 	Shader shader = LoadShader(VS_PATH, FS_PATH);
