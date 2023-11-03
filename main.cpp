@@ -10,6 +10,7 @@
 #include <rlImGui.h>
 
 #include <filesystem>
+#include <set>
 
 std::vector<Model>
 LoadModelsFromBSPFile(const std::filesystem::path& path);
@@ -65,6 +66,15 @@ main()
 		if (IsFileDropped())
 		{
 			FilePathList droppedFiles = LoadDroppedFiles();
+			
+			std::set<decltype(Texture::id)> textures{};
+			for (Model model : models)
+			{
+				Texture texture = model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture;
+				textures.insert(texture.id);
+			}
+			std::for_each(std::begin(textures), std::end(textures), rlUnloadTexture);
+			
 			std::for_each(models.begin(), models.end(), UnloadModel);
 			models = LoadModelsFromBSPFile(droppedFiles.paths[0]);
 			UnloadDroppedFiles(droppedFiles);
