@@ -257,6 +257,9 @@ struct BSP_File
 
 	BSP_File(std::ifstream& _file) : bsp_file(_file)
 	{
+		if (bsp_file.good() == false)
+			throw std::runtime_error("Failed to open file");
+
 		header = ReadT<Header>(bsp_file);
 	}
 
